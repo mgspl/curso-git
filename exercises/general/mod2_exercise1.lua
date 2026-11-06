@@ -17,30 +17,42 @@ function setupRootElement()
   return root
 end
 
-local function serialize(t, maxDepth, indent, level)
+local function serialize(t, maxDepth, indent, level, seen, buf)
   if type(t) == "number" or type(t) == "boolean" then
-    return tostring(t)
+    buf[#buf + 1] = tostring(t)
+    return
+  elseif seen[t] then
+    buf[#buf + 1] = string.format("%q", tostring(t))
+    return
   elseif type(t) ~= "table" or level > maxDepth then
-    return string.format("%q", tostring(t))
+    buf[#buf + 1] = string.format("%q", tostring(t))
+    return
   end
 
-  local prefix = string.rep(indent, level)
-  local st = {}
+  seen[t] = true
+  buf[#buf + 1] = "{\n"
+  local child_ident = string.rep(indent, level)
 
   for k, v in pairs(t) do
-    if not (type(k) == "number" and k >= 1 and k <= #t) then
-      table.insert(st, prefix .. "[" .. serialize(k, 0, "", 1) .. "] = " .. serialize(v, maxDepth, indent, level + 1))
-    else
-      table.insert(st, prefix .. serialize(t[k], maxDepth, indent, level + 1))
+    buf[#buf + 1] = child_ident
+    if type(k) ~= "number" then
+      buf[#buf + 1] = '["'
+      buf[#buf + 1] =  tostring(k)
+      buf[#buf + 1] = '"] = '
     end
+      serialize(v, maxDepth, indent, level + 1, seen, buf)
+      buf[#buf + 1] = ",\n"
   end
+  buf[#buf + 1] = string.rep(indent, level - 1)
+  buf[#buf + 1] = "}"
 
-  return "{\n" .. table.concat(st, ",\n") .. "\n" .. string.rep(indent, level - 1) .. "}"
 end
 
-
 function table.tostring(t, maxDepth, indent)
-  local text = serialize(t, maxDepth, indent, 1)
+  local seen = {}
+  local buf = {}
+  serialize(t, maxDepth, indent, 1, seen, buf)
+  local text = table.concat(buf)
   assert(loadstring("return " .. text))
   return text
 end
